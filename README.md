@@ -36,16 +36,16 @@ This indexing mechanism was devised - as opposed to ELK stack or relational data
 
 ```mermaid
 flowchart TD
-  A[Discover .txt Files] --> B[orchestrator.js]
-  B --> C{Progress Tracker (ingest-progress.json)}
-  B --> D{Spawn parse-and-hash.js}
-  D --> E[Normalize & HMAC-SHA256(email)]
-  E --> F[Detect delimiters, parse fields]
-  F --> G[Emit JSON record]
-  G --> H{LRUStreams.get(prefix)}
-  H --> I[Write JSONL to `shard_dir/xx/xxxx.jsonl`]
-  B --> J[Close all streams]
-  J --> K[Compress shards: gzip `shard_dir/xx/*.jsonl`]
+  A["Discover .txt Files"] --> B["orchestrator.js"]
+  B --> C["Progress Tracker (ingest-progress.json)"]
+  B --> D["Spawn parse-and-hash.js"]
+  D --> E["Normalize & HMAC-SHA256(email)"]
+  E --> F["Detect delimiters, parse fields"]
+  F --> G["Emit JSON record"]
+  G --> H["LRUStreams.get(prefix)"]
+  H --> I["Write JSONL to `shard_dir/xx/xxxx.jsonl`"]
+  B --> J["Close all streams"]
+  J --> K["Compress shards: gzip `shard_dir/xx/*.jsonl`"]
 ```
 
 ---
