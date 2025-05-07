@@ -1,6 +1,6 @@
-# AntiPublic Prefix-Sharded Ingestion Service
+# Breach Prefix-Sharded Ingestion Service
 
-A resilient, prefix-sharded ingestion pipeline for large static breach dumps, optimized for low-resource environments (e.g., Raspberry Pi + NAS). It:
+A resilient, prefix-sharded ingestion pipeline for large static breach dumps (e.g. AntiPublic), optimized for low-resource environments (e.g., Raspberry Pi + NAS). It:
 
 - **HMAC-hashes** and normalizes emails for privacy  
 - **Supports** colon (`:`), semicolon (`;`), and whitespace delimiters  
@@ -28,7 +28,7 @@ To index the breach data:
 - A lookup application would need to hash the input email address with the same 32-byte key, then locate the corresponding shard using the first 2 characters to locate the subdirectory, then the first 4 characters to load the shard file.
 - The lookup application would then need to perform a sequencial search on the shard file to find all matches to the input hashed email address value.
 
-This indexing mechanism was devised - as opposed to ELK stack or relational databases - to allow the ingestion and lookup applications to run on limited-resources hardware like a Raspberry Pi attached to a NAS drive or external SSD.
+This indexing mechanism was devised - as opposed to ELK stack or relational databases - to allow the ingestion and lookup applications to run on low-resource hardware like a Raspberry Pi attached to a NAS drive or external SSD.
 
 ---
 
@@ -43,9 +43,9 @@ flowchart TD
   E --> F["Detect delimiters, parse fields"]
   F --> G["Emit JSON record"]
   G --> H["LRUStreams.get(prefix)"]
-  H --> I["Write JSONL to `shard_dir/xx/xxxx.jsonl`"]
+  H --> I["Write JSONL to shard_dir/xx/xxxx.jsonl"]
   B --> J["Close all streams"]
-  J --> K["Compress shards: gzip `shard_dir/xx/*.jsonl`"]
+  J --> K["Compress shards: gzip shard_dir/xx/*.jsonl"]
 ```
 
 ---
