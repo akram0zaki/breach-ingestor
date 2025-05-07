@@ -182,4 +182,4 @@ pm2 startup systemd  # Generate startup script
 
 ## License
 
-MIT © Your Name
+MIT © Akram Zaki
