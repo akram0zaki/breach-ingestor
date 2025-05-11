@@ -75,6 +75,10 @@ class LRUStreams {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const filePath = path.join(dir, `${prefix}.jsonl`);
     const ws = fs.createWriteStream(filePath, { flags: 'a' });
+	// Attach graceful error handling
+	ws.on('error', (err) => {
+	  console.error(`Write error for ${filePath}:`, err.message || err);
+	});
     const node = { prefix, ws, prev: null, next: null };
     this._addToHead(node);
     this.map.set(prefix, { ws, node });

@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
@@ -9,6 +11,9 @@ const EMAIL_KEY = Buffer.from(process.env.EMAIL_HASH_KEY, 'hex');
 
 // Path to log file for entries with more than two fields
 const LOG_PATH = path.join(process.cwd(), 'multi_field_files.log');
+
+// Track seen entries across calls (in-memory)
+const seen = new Set();
 
 // Normalize email: trim, lowercase, remove leading symbols, strip +tags
 function normalizeEmail(email) {
@@ -91,6 +96,11 @@ async function processFile(filePath) {
     const email_hash = hashEmail(emailNorm);
     const password = rawPassword.trim();
     const { is_hash, hash_type } = detectHash(password);
+    const source = filePath;
+
+    const dedupKey = `${email_hash}:${password}:${source}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
 
     // Emit record with new order
     const record = {
@@ -99,7 +109,7 @@ async function processFile(filePath) {
       is_hash,
       hash_type,
       email: emailNorm,
-      source: filePath
+      source
     };
     console.log(JSON.stringify(record));
   }

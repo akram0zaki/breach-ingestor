@@ -1,34 +1,14 @@
-# Breach Prefix-Sharded Ingestion Service
+# AntiPublic Prefix-Sharded Ingestion Service
 
-A resilient, prefix-sharded ingestion pipeline for large static breach dumps (e.g. AntiPublic), optimized for low-resource environments (e.g., Raspberry Pi + NAS). It:
+A resilient, prefix-sharded ingestion pipeline for large static breach dumps, optimized for low-resource environments (e.g., Raspberry Pi + NAS). It:
 
 - **HMAC-hashes** and normalizes emails for privacy  
 - **Supports** colon (`:`), semicolon (`;`), and whitespace delimiters  
 - **Shards** records into 256 subdirectories by the first two hex characters of the email hash  
 - **Logs** files with entries containing more than two fields to `multi_field_files.log` for manual review  
-- Uses an **LRU stream cache** to cap open file descriptors (`MAX_STREAMS`). This is necessary to limit the number of open file handles while the ingestion process is running.  
+- Uses an **LRU stream cache** to cap open file descriptors (`MAX_STREAMS`)  
 - Is **resumable** and **crash-resilient** via per-file progress tracking  
 - Generates compressed `*.jsonl.gz` files for **O(1)** lookups  
-
-This application is used to ingest an input directory of text files to generate structured json shards as output.
-Breach compilations are massive in size and using grep for lookups is not practical. To solve this problem it is broken down into two smaller ones:
-
-- Ingestion; what this application does
-- Lookup
-
-To index the breach data:
-- The email address of every entry is hashed using a 32-byte key.
-- The first 4 characters of the hashed email hex value is then used for indexing the output.
-- All hashed emails which begin with the same 4 characters are stored in the same output shard file.
-- This design inherently means the application will generate up to 65,536 shards
-- Almost every OS would struggle handling a directory with 65,536 files, therefore the application generates a folder structure of 256 subdirectories, each of which would hold up to 256 shards.
-- The subdirectory name is the first 2 characters of the hashed email hexadecimal value.
-- This makes up for the entire output shard population (256 * 256 = 65,536)
-- This indexing makes it a lot faster to lookup an entry.
-- A lookup application would need to hash the input email address with the same 32-byte key, then locate the corresponding shard using the first 2 characters to locate the subdirectory, then the first 4 characters to load the shard file.
-- The lookup application would then need to perform a sequencial search on the shard file to find all matches to the input hashed email address value.
-
-This indexing mechanism was devised - as opposed to ELK stack or relational databases - to allow the ingestion and lookup applications to run on low-resource hardware like a Raspberry Pi attached to a NAS drive or external SSD.
 
 ---
 
@@ -36,16 +16,16 @@ This indexing mechanism was devised - as opposed to ELK stack or relational data
 
 ```mermaid
 flowchart TD
-  A["Discover .txt Files"] --> B["orchestrator.js"]
-  B --> C["Progress Tracker (ingest-progress.json)"]
-  B --> D["Spawn parse-and-hash.js"]
-  D --> E["Normalize & HMAC-SHA256(email)"]
-  E --> F["Detect delimiters, parse fields"]
-  F --> G["Emit JSON record"]
-  G --> H["LRUStreams.get(prefix)"]
-  H --> I["Write JSONL to shard_dir/xx/xxxx.jsonl"]
-  B --> J["Close all streams"]
-  J --> K["Compress shards: gzip shard_dir/xx/*.jsonl"]
+  A[Discover .txt Files] --> B[orchestrator.js]
+  B --> C{Progress Tracker (ingest-progress.json)}
+  B --> D{Spawn parse-and-hash.js}
+  D --> E[Normalize & HMAC-SHA256(email)]
+  E --> F[Detect delimiters, parse fields]
+  F --> G[Emit JSON record]
+  G --> H{LRUStreams.get(prefix)}
+  H --> I[Write JSONL to `shard_dir/xx/xxxx.jsonl`]
+  B --> J[Close all streams]
+  J --> K[Compress shards: gzip `shard_dir/xx/*.jsonl`]
 ```
 
 ---
@@ -159,8 +139,35 @@ pm2 startup systemd  # Generate startup script
 
 - **Progress**: View `ingest-progress.json`  
 - **Multi-field files**: Check `multi_field_files.log`  
+- Flush logs without deleting them: pm2 flush ingest-orchestrator
+- Flush logs manually:
+cd ~/.pm2/logs/
+ls ingest-orchestrator*
+then truncate the files:
+: > ~/.pm2/logs/ingest-orchestrator-out.log
+: > ~/.pm2/logs/ingest-orchestrator-error.log
 
 ---
+
+## Troubleshooting
+
+### EMFILE: too many open files
+
+- Node.js ran into the OS limit for maximum simultaneously open file descriptors. This is a hard crash. The error is unhandled and causes Node.js to terminate your process. Any pending writes to shards at the moment of crash may be lost unless they were flushed to disk.
+
+- Cause? Your ingestion pipeline keeps many shard files open at once (e.g. MAX_STREAMS = 256), and with other open descriptors (input file, logs, stdout, etc.), it eventually exceeds your OS limit — often 1024 or 4096 on Raspberry Pi/Linux.
+
+- Fix:
+  - Lower MAX_STREAMS in orchestrator.js (or .env), use a small value like 64. This reduces how many .jsonl files are open concurrently. Node will reuse handles via the LRU cache.
+  - You can also increase the OS limit temporarily until the next reboot. Execute "ulimit -n 4096"
+  - To permenantely increase the OS limit. Edit "sudo nano /etc/security/limits.conf" and add:
+      pi soft nofile 4096
+      pi hard nofile 8192
+  - To ensure PAM respects it edit "sudo nano /etc/pam.d/common-session" and add:
+      session required pam_limits.so
+
+
+
 
 ## Robustness & Resilience
 
@@ -182,4 +189,4 @@ pm2 startup systemd  # Generate startup script
 
 ## License
 
-MIT © Akram Zaki
+MIT © Your Name
