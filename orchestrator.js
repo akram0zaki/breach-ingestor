@@ -7,9 +7,10 @@ import { spawnSync } from 'child_process';
 import readline from 'readline';
 
 // Configuration
-const ROOT = process.env.INPUT_DIR || '/mnt/Torrents/WDHome/breaches';
-const SHARD_DIR = process.env.SHARD_DIR || '/mnt/Torrents/WDHome/data/shards';
-const PROGRESS_FILE = path.join(SHARD_DIR, 'ingest-progress.json');
+const ROOT = process.env.INPUT_DIR || '/mnt/nas/breaches';
+const SHARD_DIR = process.env.SHARD_DIR || '/mnt/nas/data/shards';
+const PROGRESS_FILE_NAME = process.env.PROGRESS_FILE_NAME || 'ingest-progress.json';
+const PROGRESS_FILE = path.join(SHARD_DIR, PROGRESS_FILE_NAME);
 const MAX_STREAMS = parseInt(process.env.MAX_STREAMS || '64', 10);
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '500', 10);
 const BATCH_INTERVAL_MS = parseInt(process.env.BATCH_INTERVAL_MS || '2000', 10);
@@ -279,7 +280,7 @@ async function processFile(filePath) {
   const total = files.length;
   // DEBUG SETTINGS
   log('INFO', `==== DEBUG SETTINGS ====`);
-  log('INFO', `ROOT=${ROOT}  SHARD_DIR=${SHARD_DIR}`);
+  log('INFO', `ROOT=${ROOT}  SHARD_DIR=${SHARD_DIR} PROGRESS_FILE=${PROGRESS_FILE}`);
   log('INFO', `CONCURRENCY=${CONCURRENCY}  MAX_STREAMS=${MAX_STREAMS}  BATCH_SIZE=${BATCH_SIZE}  BATCH_INTERVAL_MS=${BATCH_INTERVAL_MS}`);
   log('INFO', `Discovered ${total} .txt files in ROOT`);
 
