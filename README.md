@@ -91,7 +91,7 @@ pm2 -v
    sudo chown -R $(whoami):$(whoami) "$SHARD_DIR"
    ```
 
-3. (Optional) Customize `ecosystem.config.cjs` for PM2:
+3. (Optional) Customize `ecosystem.config.cjs` for PM2 (Unix/Linux ONLY):
 
    ```js
    module.exports = {
@@ -106,6 +106,19 @@ pm2 -v
      }]
    };
    ```
+4. (Optional) Customize `ecosystem.config.cjs` for PM2 (Windows):
+ ```js
+  module.exports = {
+    apps: [{
+      name: 'ingest-orchestrator',
+      script: 'orchestrator.js',
+      interpreter: 'node',
+      autorestart: true,
+      watch: false,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    }]
+  };
+'''
 
 ---
 
