@@ -313,8 +313,22 @@ async function processFile(filePath) {
   // Close all open shard streams
   await cache.closeAll();
 
-  // Compress shards into gz
-  spawnSync('bash', ['-c', `gzip -k -f ${SHARD_DIR}/*/*.jsonl`], { stdio: 'inherit' });
+  //spawnSync('bash', ['-c', `gzip -k -f ${SHARD_DIR}/*/*.jsonl`], { stdio: 'inherit' });
+
+  // Compress shards individually to avoid argument list too long
+  // log('INFO', 'Compressing shards individually...');
+  // const subdirs = fs.readdirSync(SHARD_DIR, { withFileTypes: true })
+  //   .filter(d => d.isDirectory())
+  //   .map(d => path.join(SHARD_DIR, d.name));
+  // for (const dir of subdirs) {
+  //   const files = fs.readdirSync(dir)
+  //     .filter(f => f.endsWith('.jsonl'))
+  //     .map(f => path.join(dir, f));
+  //   for (const file of files) {
+  //     log('DEBUG', `gzip: ${file}`);
+  //     spawnSync('gzip', ['-k', '-f', file], { stdio: 'inherit' });
+  //   }
+  // }
 
   log('INFO', '==== RUN COMPLETE:' + new Date().toISOString() + '====');
   process.exit(0);
