@@ -16,6 +16,32 @@ const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '500', 10);
 const BATCH_INTERVAL_MS = parseInt(process.env.BATCH_INTERVAL_MS || '2000', 10);
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '2', 10);
 
+// Safe stop mechanism
+const STOP_FILE = 'STOP_INGESTION';
+let shouldStop = false;
+
+// Signal handlers (Unix-like systems)
+process.on('SIGTERM', () => {
+  log('INFO', `[${new Date().toISOString()}] SIGTERM received, will stop after current file completes...`);
+  shouldStop = true;
+});
+
+process.on('SIGINT', () => {
+  log('INFO', `[${new Date().toISOString()}] SIGINT received, will stop after current file completes...`);
+  shouldStop = true;
+});
+
+// Check for stop requests (cross-platform)
+function checkForStopRequest() {
+  if (shouldStop) return true;
+  if (fs.existsSync(STOP_FILE)) {
+    log('INFO', `[${new Date().toISOString()}] Stop file detected, will stop after current file completes...`);
+    shouldStop = true;
+    return true;
+  }
+  return false;
+}
+
 const LEVELS = { ERROR: 0, INFO: 1, DEBUG: 2 };
 const CURRENT_LEVEL = process.env.LOG_LEVEL
   ? LEVELS[process.env.LOG_LEVEL.toUpperCase()] 
@@ -27,7 +53,8 @@ function log(level, ...args) {
   }
 }
 
-log('INFO', 'Log level=' + CURRENT_LEVEL)
+log('INFO', 'Log level=' + CURRENT_LEVEL);
+log('INFO', `[${new Date().toISOString()}] Safe stop: Send SIGTERM/SIGINT or create '${STOP_FILE}' file`);
 
 // Ensure directories exist
 function ensureDir(dir) {
@@ -239,7 +266,7 @@ function findTxtFiles(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files = files.concat(findTxtFiles(fullPath));
+      files = files.concat(findTxtFiles(fullPath));5
     } else if (entry.isFile() && entry.name.endsWith('.txt')) {
       files.push(fullPath);
     }
@@ -249,7 +276,7 @@ function findTxtFiles(dir) {
 
 // Process each file line by line
 async function processFile(filePath) {
-  const stream = fs.createReadStream(filePath, { highWaterMark: 64 * 1024 });
+  const stream = fs.createReadStream(filePath, { highWaterMark: 5 * 1024 * 1024 });
   const rl = readline.createInterface({ input: stream });
   for await (const str of rl) {
     if (!str) continue;
@@ -283,9 +310,14 @@ async function processFile(filePath) {
   log('INFO', `ROOT=${ROOT}  SHARD_DIR=${SHARD_DIR} PROGRESS_FILE=${PROGRESS_FILE}`);
   log('INFO', `CONCURRENCY=${CONCURRENCY}  MAX_STREAMS=${MAX_STREAMS}  BATCH_SIZE=${BATCH_SIZE}  BATCH_INTERVAL_MS=${BATCH_INTERVAL_MS}`);
   log('INFO', `Discovered ${total} .txt files in ROOT`);
-
   const worker = async (id) => {
     while (true) {
+      // Check for stop request before processing each file
+      if (checkForStopRequest()) {
+        log('INFO', `[${new Date().toISOString()}] Stop requested - gracefully terminating worker ${id} after processing ${Object.keys(progress).filter(k => progress[k] === 'done').length} files`);
+        break;
+      }
+
       const i = index++;
       const file = files[i];
       log('DEBUG', `[worker ${id}] picked index=${i} → ${file}`);
@@ -299,6 +331,7 @@ async function processFile(filePath) {
       saveProgress();
       try {
         await processFile(file);
+        console.log(`✔ Completed processing: ${file}`);
         progress[file] = 'done';
         saveProgress();
       } catch (e) {
@@ -310,9 +343,18 @@ async function processFile(filePath) {
   // Launch concurrent workers
   const workers = Array.from({ length: CONCURRENCY }, (_, i) => worker(i));
   await Promise.all(workers);
-
   // Close all open shard streams
   await cache.closeAll();
+
+  // Clean up stop file if it exists
+  if (fs.existsSync(STOP_FILE)) {
+    try {
+      fs.unlinkSync(STOP_FILE);
+      log('INFO', `[${new Date().toISOString()}] Cleaned up stop file`);
+    } catch (e) {
+      log('INFO', `[${new Date().toISOString()}] Warning: could not clean up stop file: ${e.message}`);
+    }
+  }
 
   //spawnSync('bash', ['-c', `gzip -k -f ${SHARD_DIR}/*/*.jsonl`], { stdio: 'inherit' });
 
@@ -331,6 +373,10 @@ async function processFile(filePath) {
   //   }
   // }
 
-  log('INFO', '==== RUN COMPLETE:' + new Date().toISOString() + '====');
+  if (shouldStop) {
+    log('INFO', `[${new Date().toISOString()}] Ingestion stopped gracefully, progress saved to ${PROGRESS_FILE}`);
+  } else {
+    log('INFO', '==== RUN COMPLETE:' + new Date().toISOString() + '====');
+  }
   process.exit(0);
 })();

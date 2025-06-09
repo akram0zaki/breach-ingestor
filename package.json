@@ -1,19 +1,22 @@
 {
-  "name": "anti-public-ingest",
+  "name": "breach-ingestor",
   "version": "1.0.0",
   "description": "Resumable ingestion of AntiPublic dump into JSONL shards",
-  "main": "orchestrator.js",
+  "main": "ingest-fs.js",
   "type": "module",
   "engines": {
     "node": ">=14"
   },
   "scripts": {
-    "parse": "node parse-and-hash.js",
-    "ingest": "node orchestrator.js",
-    "start": "pm2 start ecosystem.config.cjs --only ingest-orchestrator",
-    "stop": "pm2 stop ingest-orchestrator",
+    "ingest": "node ingest-fs.js",
+    "start": "pm2 start ecosystem.config.cjs --only breach-ingestor",
+    "stop": "pm2 stop breach-ingestor",
     "status": "pm2 list",
-    "logs": "pm2 logs ingest-orchestrator"
+    "logs": "pm2 logs breach-ingestor",
+    "ingestpg": "node ingest-pg.js",
+    "startpg": "pm2 start ecosystem.config.cjs --only breach-ingestor-pg",
+    "stoppg": "pm2 stop breach-ingestor-pg",
+    "logspg": "pm2 logs breach-ingestor-pg"
   },
   "dependencies": {
     "dotenv": "^16.0.0"
