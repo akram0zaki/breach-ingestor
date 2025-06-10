@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * ingest.js
+ * ingest-pg.js
  *
  * Recursively scans all .txt files under a root directory at any depth,
  * parses email/password pairs (any order, various delimiters),
@@ -10,7 +10,8 @@
  * If STAGING=true in .env (default false), data is loaded into a staging table first,
  * then merged into the main table with duplicate-skipping via ON CONFLICT.
  * Otherwise, data is imported directly into the main table without deduplication.
- * * Maintains a progress file (via PROGRESS_FILE_NAME) to resume on interruption.
+ * 
+ * Maintains a progress file (via PROGRESS_FILE_NAME) to resume on interruption.
  *
  * Safe stop mechanism:
  * - Linux/macOS: Send SIGTERM or SIGINT (Ctrl+C)
@@ -227,7 +228,7 @@ for (const file of files) {
       // Skip records with empty fields
       if (!email || !pw) {
         skippedRecords++;
-        debugLog(`[${new Date().toISOString()}] Skipping record with empty fields in ${file}`);
+        // debugLog(`[${new Date().toISOString()}] Skipping record with empty fields in ${file}`);
         continue;
       }
       

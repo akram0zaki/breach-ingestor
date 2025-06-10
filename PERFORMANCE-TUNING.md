@@ -6,6 +6,7 @@ This guide covers optimization strategies for the breach-ingestor system to main
 - [Performance Monitoring](#performance-monitoring)
 - [Application Optimizations](#application-optimizations)
 - [PostgreSQL Configuration](#postgresql-configuration)
+- [Billion-Record Scale Optimization](#billion-record-scale-optimization)
 - [System-Level Optimizations](#system-level-optimizations)
 - [Hardware Recommendations](#hardware-recommendations)
 - [NAS Storage Optimization](#nas-storage-optimization)
@@ -311,6 +312,139 @@ sudo mount -t nfs synology-ip:/volume1/postgres /mnt/nas/postgres \
 - Use USB 3.0 SSD for best performance (avoid SD card for database)
 - Enable TRIM support with `discard` mount option
 - Consider splitting PostgreSQL data and WAL to separate USB devices if possible
+
+---
+
+## Billion-Record Scale Optimization
+
+### PostgreSQL Scale Capabilities
+
+PostgreSQL can absolutely handle billions of records with proper configuration:
+
+- **Maximum table size**: 32 TB
+- **Maximum rows**: No theoretical limit (storage dependent)
+- **Real-world examples**: Discord (trillion+ messages), Instagram (billion+ photos)
+- **Your estimated storage**: 300-500 GB per billion breach records
+
+### Index Strategy for Bulk Loading
+
+#### Performance Impact of Indexes During Bulk Insert
+
+| Operation | With Indexes | Without Indexes | Performance Gain |
+|-----------|-------------|----------------|------------------|
+| INSERT speed | 100% baseline | 300-500% faster | **3-5x improvement** |
+| Memory usage | High (index maintenance) | Low (data only) | **60-80% reduction** |
+| Disk I/O | Very high (data + indexes) | Moderate (data only) | **70-90% reduction** |
+| WAL generation | 2-3x data size | ~1x data size | **50-70% reduction** |
+
+#### Recommended Strategy for Billion-Record Ingestion
+
+```sql
+-- 1. BEFORE starting bulk import (connect as superuser)
+
+-- Drop indexes that slow down inserts
+DROP INDEX IF EXISTS idx_unique_breach;
+
+-- Optimize PostgreSQL for bulk loading
+SET maintenance_work_mem = '2GB';          -- More memory for operations
+SET checkpoint_completion_target = 0.9;    -- Spread checkpoints
+SET wal_compression = on;                  -- Reduce WAL size
+SET synchronous_commit = off;              -- Async commits (slight risk)
+SET log_min_duration_statement = 60000;   -- Log slow queries only
+
+-- Disable autovacuum during bulk load
+ALTER TABLE breaches SET (autovacuum_enabled = false);
+ALTER TABLE breaches_stage SET (autovacuum_enabled = false);
+
+-- 2. DURING bulk import
+-- Your existing ingestion process runs here
+-- Expected performance: 15-25 min/1M records (vs 40-60 min/1M with indexes)
+
+-- 3. AFTER bulk import completion
+-- Re-enable autovacuum
+ALTER TABLE breaches SET (autovacuum_enabled = true);
+
+-- Create indexes using parallel workers (PostgreSQL 11+)
+SET max_parallel_maintenance_workers = 4;
+SET maintenance_work_mem = '4GB';
+
+-- Create primary key (if not exists)
+-- Note: BIGSERIAL automatically creates primary key, but if dropped:
+-- ALTER TABLE breaches ADD CONSTRAINT breaches_pkey PRIMARY KEY (id);
+
+-- Create unique constraint index (this is your bottleneck)
+CREATE UNIQUE INDEX CONCURRENTLY idx_unique_breach 
+ON breaches(email_norm, password, source);
+
+-- Create additional performance indexes
+CREATE INDEX CONCURRENTLY idx_breaches_email_norm ON breaches(email_norm);
+CREATE INDEX CONCURRENTLY idx_breaches_source ON breaches(source);
+CREATE INDEX CONCURRENTLY idx_breaches_hash_type ON breaches(hash_type);
+
+-- Final maintenance
+VACUUM ANALYZE breaches;
+
+-- Reset settings to normal
+RESET maintenance_work_mem;
+RESET checkpoint_completion_target;
+RESET wal_compression;
+RESET synchronous_commit;
+RESET log_min_duration_statement;
+```
+
+#### Index Creation Time Estimates (Billion Records)
+
+| Index Type | Creation Time | Storage Size | Notes |
+|------------|---------------|--------------|-------|
+| Primary Key (id) | 2-4 hours | 40-50 GB | B-tree on BIGSERIAL |
+| Unique Constraint | 6-12 hours | 100-150 GB | Composite index (email,password,source) |
+| Single Column | 1-3 hours | 30-80 GB | Depends on column cardinality |
+
+#### Optimized Ingestion Configuration
+
+Update your `.env` for billion-record ingestion:
+
+```properties
+# Optimized for bulk loading without indexes
+STAGING=false                    # Direct insert (faster without unique constraint)
+BATCH_SIZE=100000               # Larger batches for better throughput
+PROGRESS_INTERVAL=500000        # Less frequent logging
+DEBUG=false                     # Reduce log overhead
+```
+
+#### Memory Configuration for Billion-Record Scale
+
+```sql
+-- PostgreSQL configuration for massive bulk imports
+-- Add to postgresql.conf
+
+# Memory settings for Pi 5 during bulk import
+shared_buffers = '1GB'                    # PostgreSQL shared memory
+maintenance_work_mem = '2GB'              # For index creation
+work_mem = '256MB'                        # Larger work memory
+effective_cache_size = '4GB'              # Available for caching
+
+# WAL settings for bulk import
+wal_buffers = '256MB'                     # Larger WAL buffers
+max_wal_size = '4GB'                      # More WAL space
+checkpoint_timeout = '30min'              # Less frequent checkpoints
+checkpoint_completion_target = 0.9       # Spread checkpoint I/O
+
+# Bulk import optimizations
+autovacuum = off                          # Disable during bulk import
+fsync = off                               # DANGEROUS: Only for bulk import
+synchronous_commit = off                  # Async commits
+full_page_writes = off                    # DANGEROUS: Only for bulk import
+
+# Connection settings
+max_connections = 25                      # Reduced for bulk operations
+```
+
+**⚠️ IMPORTANT SAFETY NOTES:**
+- `fsync = off` and `full_page_writes = off` are **DANGEROUS** - only use during bulk import
+- Take a backup before starting billion-record ingestion
+- Re-enable safety settings after import completion
+- Consider using a separate instance for bulk import if possible
 
 ---
 

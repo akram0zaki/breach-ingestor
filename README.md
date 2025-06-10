@@ -194,31 +194,35 @@ npm run stoppg    # Stop PM2 process
 #### Merge Shards
 Combine shard files from multiple directories:
 ```bash
-SHARD_DIRS=/path/to/base,/path/to/other1,/path/to/other2 node merge-shards.js
+SHARD_DIRS=/path/to/base,/path/to/other1,/path/to/other2
+node scripts/fs-merge-shards.js
 ```
 
 #### Scrub Emails
 Remove cleartext email fields for privacy:
 ```bash
-SHARD_DIR=/path/to/shards node scrub-emails.js
+SHARD_DIR=/path/to/shards 
+node scripts/fs-scrub-emails.js
 ```
 
 #### Compress Shards
 Convert .jsonl files to .jsonl.gz:
 ```bash
-SHARD_DIR=/path/to/shards node compress-shards.js
+SHARD_DIR=/path/to/shards 
+node scripts/fs-compress-shards.js
 ```
 
 #### Deduplicate Shards
 Remove duplicate entries retroactively:
 ```bash
-SHARD_DIR=/path/to/shards node retro-dedupe.js
+SHARD_DIR=/path/to/shards
+node scripts/fs-retro-dedupe.js
 ```
 
 #### Test Email Hashing
 Test email normalization and hashing:
 ```bash
-node test-hash.js example@domain.com
+node scripts/test-hash.js example@domain.com
 ```
 
 ---

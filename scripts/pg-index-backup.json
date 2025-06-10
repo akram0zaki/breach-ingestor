@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-06-10T12:37:44.816Z",
+  "indexes": [
+    {
+      "indexname": "idx_breaches_email_norm",
+      "indexdef": "CREATE INDEX idx_breaches_email_norm ON public.breaches USING btree (email_norm)"
+    }
+  ]
+}

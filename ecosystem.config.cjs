@@ -3,8 +3,8 @@ module.exports = {
   apps: [{
     name: 'breach-ingestor',
     script: 'ingest-fs.js',
-    interpreter: 'bash',
-    interpreter_args: '-c "nice -n 10 ionice -c2 -n7 node orchestrator.js"',
+    interpreter: 'node',
+    // interpreter_args: '-c "nice -n 10 ionice -c2 -n7 node orchestrator.js"',
     watch: false,
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     autorestart: true,
@@ -15,9 +15,12 @@ module.exports = {
     stop_exit_codes: [0]
   }, {
     name: 'breach-ingestor-pg',
-    script: 'ingest-pg.js',
-    interpreter: 'node',
-    interpreter_args: '--max-old-space-size=1536',
+    // script: 'ingest-pg.js',
+    // interpreter: 'node',
+    // interpreter_args: '--max-old-space-size=1536',
+    script: 'nice -n 10 ionice -c2 -n7 node --max-old-space-size=1536 ingest-pg.js',
+    interpreter: 'bash',
+    interpreter_args: '-c',
     watch: false,
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     autorestart: true,

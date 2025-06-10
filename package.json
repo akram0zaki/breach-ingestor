@@ -19,7 +19,9 @@
     "logspg": "pm2 logs breach-ingestor-pg"
   },
   "dependencies": {
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "pg": "^8.16.0",
+    "pg-copy-streams": "^7.0.0"
   },
   "license": "MIT"
 }
