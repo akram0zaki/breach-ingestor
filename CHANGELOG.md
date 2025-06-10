@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-06-10
+
+### Added
+- **Performance Monitoring**: Enhanced `ingest-pg.js` with automatic performance metrics:
+  - Time per 1 million records tracking
+  - Processing time calculation for each file
+  - Performance degradation detection
+  - Real-time metrics in log output format: `X.X min/1M records`
+
+- **Automatic Database Maintenance**: Periodic optimization to prevent performance degradation:
+  - VACUUM ANALYZE runs every 5 processed files
+  - Configurable maintenance intervals
+  - Automatic cleanup of table bloat and index optimization
+
+- **Performance Tuning Guide**: Comprehensive documentation covering:
+  - Application-level optimizations
+  - PostgreSQL configuration for bulk imports
+  - System-level tuning recommendations
+  - Hardware requirements and layout suggestions
+  - Troubleshooting guide for performance issues
+
+### Changed
+- **Ecosystem Configuration**: Enhanced PM2 settings for better performance:
+  - Increased Node.js heap size to 4GB (`--max-old-space-size=4096`)
+  - Added UV_THREADPOOL_SIZE=8 for better I/O performance
+  - Production environment variables
+
+- **Logging Enhancement**: More detailed performance information:
+  - Processing time per file with millisecond precision
+  - Records per million calculation
+  - Maintenance cycle logging
+  - Performance trend visibility
+
+### Performance Improvements
+- **Database Optimization**: Automatic VACUUM ANALYZE prevents index bloat
+- **Memory Management**: Optimized Node.js memory allocation
+- **I/O Performance**: Enhanced thread pool size for better throughput
+- **Monitoring**: Real-time performance degradation detection
+
+### Documentation
+- **PERFORMANCE-TUNING.md**: Complete guide covering:
+  - Performance monitoring and baseline metrics
+  - PostgreSQL configuration for bulk operations
+  - System-level optimizations (Linux/macOS/Windows)
+  - Hardware recommendations
+  - Troubleshooting procedures
+
 ## [1.0.0] - 2025-06-09
 
 ### Added

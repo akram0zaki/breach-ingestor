@@ -41,7 +41,7 @@ A comprehensive Node.js toolkit for processing and managing large breach dataset
 
 ## Architecture
 
-### Filesystem Sharding Flow
+### Filesystem Sharding Flow (ingest-fs.js)
 
 ```mermaid
 flowchart TD
@@ -61,7 +61,34 @@ flowchart TD
 Breach Files → Email Normalization → HMAC-SHA256 → Prefix Extraction → Shard Assignment → JSONL Output
 ```
 
-### PostgreSQL Ingestion Flow
+### PostgreSQL Ingestion (ingest-pg.js)
+
+The copy stream mechanism in ingest-pg.js uses PostgreSQL's COPY command with Node.js streams for high-performance bulk data insertion.
+
+This streaming architecture allows the script to process multi-gigabyte files while using minimal memory and achieving maximum throughput to PostgreSQL.
+
+#### Stream Architecture
+
+```js
+// 1. Create a PassThrough stream (in-memory buffer)
+const pass = new PassThrough();
+
+// 2. Create PostgreSQL COPY stream using pg-copy-streams
+const copyStream = pg.query(copyFrom.from(copySql));
+
+// 3. Pipe data from PassThrough to PostgreSQL
+pass.pipe(copyStream);
+```
+
+#### Data Flow
+
+┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
+│   Text File     │───▶│ PassThrough  │───▶│  PostgreSQL     │
+│   (line by line)│    │   Stream     │    │  COPY Stream    │
+└─────────────────┘    └──────────────┘    └─────────────────┘
+
+#### Process Flow
+
 ```
 Breach Files → Format Detection → Hash Type Detection → Bulk COPY → Optional Staging → Main Table
 ```
@@ -80,7 +107,7 @@ Breach Files → Format Detection → Hash Type Detection → Bulk COPY → Opti
 ## Installation
 
 ```bash
-git clone https://github.com/akram0zaki/breach-ingestor .
+git clone <repo-url> .
 npm install
 ```
 
@@ -323,6 +350,8 @@ cat skipped.log  # View files that couldn't be processed
 - **I/O scheduling**: Use `ionice -c2 -n7` for background processing
 - **Process priority**: Use `nice -n 10` to lower CPU priority
 - **Disk optimization**: Use SSDs for shard directories when possible
+
+For detailed performance optimization, see [PERFORMANCE-TUNING.md](PERFORMANCE-TUNING.md).
 
 ---
 

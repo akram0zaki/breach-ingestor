@@ -145,6 +145,9 @@ log(`[${new Date().toISOString()}] Ingest job started`);
 const files = await fg([`${DATA_ROOT}/**/*.txt`, `${DATA_ROOT}/**/*.TXT`], { caseSensitiveMatch: false });
 log(`[${new Date().toISOString()}] Discovered ${files.length} files`);
 
+// Performance tracking
+let processedSinceLastMaintenance = 0;
+
 // Process each file with resilience
 for (const file of files) {
   // Check for stop request before processing each file
@@ -160,7 +163,8 @@ for (const file of files) {
   }
 
   try {
-    log(`[${new Date().toISOString()}] Processing: ${file}`);    // Detect delimiter & order (check second line in case first is header)
+    const fileStartTime = Date.now();
+    log(`[${new Date().toISOString()}] Processing: ${file}`);// Detect delimiter & order (check second line in case first is header)
     const fd = fs.createReadStream(file);
     const rlD = readline.createInterface({ input: fd });
     let delim, order;
@@ -212,7 +216,7 @@ for (const file of files) {
       // Skip records with wrong field count
       if (fields.length !== 2) {
         skippedRecords++;
-        debugLog(`[${new Date().toISOString()}] Skipping record with ${fields.length} fields in ${file}`);
+        // debugLog(`[${new Date().toISOString()}] Skipping record with ${fields.length} fields in ${file}`);
         continue;
       }
       
@@ -242,7 +246,7 @@ for (const file of files) {
       else if (/^\$2[aby]\$/.test(pw)) is_hash=true, hash_type='bcrypt';
       const esc=v=>`"${String(v).replace(/"/g,'""')}"`;
       pass.write([norm,email,pw,is_hash,hash_type,file].map(esc).join(',')+'\n');
-      if (++count % PROGRESS_INTERVAL === 0) debugLog(`[${new Date().toISOString()}] ${count} rows parsed`);
+      if (++count % PROGRESS_INTERVAL === 0) log(`[${new Date().toISOString()}] ${count} rows parsed`);
     }    rl.close(); pass.end();
 
     try {
@@ -264,11 +268,33 @@ for (const file of files) {
       await pg.query(`INSERT INTO breaches(email_norm, raw_email, password, is_hash, hash_type, source)
                      SELECT email_norm, raw_email, password, is_hash, hash_type, source FROM breaches_stage
                      ON CONFLICT(email_norm,password,source) DO NOTHING`);
-      await pg.query('TRUNCATE breaches_stage');
-    }
+      await pg.query('TRUNCATE breaches_stage');    }
+    
+    // Calculate performance metrics
+    const fileEndTime = Date.now();
+    const processingTimeMs = fileEndTime - fileStartTime;
+    const processingTimeMin = processingTimeMs / (1000 * 60);
+    const recordsPerMillion = count / 1000000;
+    const timePerMillionRecords = recordsPerMillion > 0 ? processingTimeMin / recordsPerMillion : 0;
     
     const skippedMsg = skippedRecords > 0 ? ` (${skippedRecords} oversized records skipped)` : '';
-    log(`[${new Date().toISOString()}] Imported ${count} rows from ${file}${skippedMsg}`);
+    const performanceMsg = count > 0 ? ` | ${timePerMillionRecords.toFixed(1)} min/1M records` : '';
+    log(`[${new Date().toISOString()}] Imported ${count} rows from ${file}${skippedMsg}${performanceMsg}`);
+    
+    // Periodic maintenance to prevent performance degradation
+    if (++processedSinceLastMaintenance >= 5) {
+      log(`[${new Date().toISOString()}] Performing maintenance after ${processedSinceLastMaintenance} files...`);
+      try {
+        if (USE_STAGING) {
+          await pg.query('VACUUM ANALYZE breaches_stage');
+        }
+        await pg.query('VACUUM ANALYZE breaches');
+        log(`[${new Date().toISOString()}] VACUUM ANALYZE completed`);
+      } catch (vacuumError) {
+        log(`[${new Date().toISOString()}] Warning: VACUUM ANALYZE failed: ${vacuumError.message}`);
+      }
+      processedSinceLastMaintenance = 0;
+    }
   } catch (err) {
     // Graceful error: log and continue
     log(`[${new Date().toISOString()}] Error processing ${file}: ${err.message}`);
