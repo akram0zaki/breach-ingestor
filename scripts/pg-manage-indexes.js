@@ -23,7 +23,7 @@ const client = new Client({
   port: 5432,
   database: 'breachdb',
   user: 'pi',
-  password: 'DeHamala2019'
+  password: '<password>'
 });
 
 const log = (...args) => console.log(`[${new Date().toISOString()}]`, ...args);

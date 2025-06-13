@@ -146,8 +146,16 @@ log(`[${new Date().toISOString()}] Ingest job started`);
 const files = await fg([`${DATA_ROOT}/**/*.txt`, `${DATA_ROOT}/**/*.TXT`], { caseSensitiveMatch: false });
 log(`[${new Date().toISOString()}] Discovered ${files.length} files`);
 
-// Performance tracking
+// Performance tracking with record-based maintenance
 let processedSinceLastMaintenance = 0;
+let totalRecordsSinceLastMaintenance = 0;
+
+// Configurable maintenance thresholds
+const MAINTENANCE_RECORD_THRESHOLD = parseInt(process.env.MAINTENANCE_RECORDS || '1000000'); // 1M records default
+const MAINTENANCE_FILE_THRESHOLD = parseInt(process.env.MAINTENANCE_FILES || '20'); // 20 files max
+const MAINTENANCE_TIME_THRESHOLD = parseInt(process.env.MAINTENANCE_MINUTES || '60') * 60 * 1000; // 60 minutes
+
+let lastMaintenanceTime = Date.now();
 
 // Process each file with resilience
 for (const file of files) {
@@ -276,25 +284,42 @@ for (const file of files) {
     const processingTimeMs = fileEndTime - fileStartTime;
     const processingTimeMin = processingTimeMs / (1000 * 60);
     const recordsPerMillion = count / 1000000;
-    const timePerMillionRecords = recordsPerMillion > 0 ? processingTimeMin / recordsPerMillion : 0;
-    
+    const timePerMillionRecords = recordsPerMillion > 0 ? processingTimeMin / recordsPerMillion : 0;    
     const skippedMsg = skippedRecords > 0 ? ` (${skippedRecords} oversized records skipped)` : '';
     const performanceMsg = count > 0 ? ` | ${timePerMillionRecords.toFixed(1)} min/1M records` : '';
     log(`[${new Date().toISOString()}] Imported ${count} rows from ${file}${skippedMsg}${performanceMsg}`);
     
-    // Periodic maintenance to prevent performance degradation
-    if (++processedSinceLastMaintenance >= 5) {
-      log(`[${new Date().toISOString()}] Performing maintenance after ${processedSinceLastMaintenance} files...`);
+    // Update maintenance counters
+    processedSinceLastMaintenance++;
+    totalRecordsSinceLastMaintenance += count;
+    
+    // Check if maintenance is needed based on multiple criteria
+    const timeSinceLastMaintenance = Date.now() - lastMaintenanceTime;
+    const shouldRunMaintenance = 
+      totalRecordsSinceLastMaintenance >= MAINTENANCE_RECORD_THRESHOLD ||
+      processedSinceLastMaintenance >= MAINTENANCE_FILE_THRESHOLD ||
+      timeSinceLastMaintenance >= MAINTENANCE_TIME_THRESHOLD;
+
+    if (shouldRunMaintenance) {
+      log(`[${new Date().toISOString()}] Performing maintenance after ${processedSinceLastMaintenance} files, ${totalRecordsSinceLastMaintenance.toLocaleString()} records, ${Math.round(timeSinceLastMaintenance/60000)} minutes`);
+      
+      const maintenanceStart = Date.now();
       try {
         if (USE_STAGING) {
           await pg.query('VACUUM ANALYZE breaches_stage');
         }
         await pg.query('VACUUM ANALYZE breaches');
-        log(`[${new Date().toISOString()}] VACUUM ANALYZE completed`);
+        
+        const maintenanceTime = Date.now() - maintenanceStart;
+        log(`[${new Date().toISOString()}] VACUUM ANALYZE completed in ${Math.round(maintenanceTime/1000)}s`);
       } catch (vacuumError) {
         log(`[${new Date().toISOString()}] Warning: VACUUM ANALYZE failed: ${vacuumError.message}`);
       }
+      
+      // Reset counters
       processedSinceLastMaintenance = 0;
+      totalRecordsSinceLastMaintenance = 0;
+      lastMaintenanceTime = Date.now();
     }
   } catch (err) {
     // Graceful error: log and continue
